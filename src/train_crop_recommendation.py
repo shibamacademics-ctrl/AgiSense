@@ -85,4 +85,40 @@ def evaluate(model,x_test,y_test,label_encoder=None,model_name = "model"):
   plt.show()
   return acc,class_report
 
-"""### **Not Finished**"""
+def main():
+  x,y,df = load_data("Crop_recommendation.csv")
+  x_train,x_test,y_train,y_test = train_test_split(x,y,test_size = 0.2,random_state = 42,stratify = y)
+  results = {}
+  rf_model,rf_params,rf_cv_score = train_rf(x_train,y_train)
+  rf_acc,rf_report = evaluate(rf_model,x_test,y_test,model_name="RandomForest")
+  joblib.dump(rf_model,"rf_model.pkl")
+  results["RandomForest"] = {"best_params":rf_params,"cv_accuracy":rf_cv_score,"test_accuracy":rf_acc}
+  print("Test Accuracy:",rf_acc)
+  print("Train Accracy:",rf_model.score(x_train,y_train))
+  l = LabelEncoder()
+  y_train_enc = l.fit_transform(y_train)
+  y_test_enc = l.transform(y_test)
+
+  xgb_model,xgb_params,xgb_cv_score = train_xgb(x_train,y_train_enc)
+  xgb_acc,xgb_report = evaluate(xgb_model,x_test,y_test_enc,label_encoder=l,model_name="XGBoost")
+  joblib.dump(xgb_model,"xgb_model.pkl")
+  joblib.dump(l,"label_encoder.pkl")
+  results["XGBoost"] = {"best_params":xgb_params,"cv_accuracy":xgb_cv_score,"test_accuracy":xgb_acc}
+  print("Test Accuracy:",xgb_acc)
+  print("Train Accracy:",xgb_model.score(x_train,y_train_enc))
+  print(results)
+
+main()
+
+
+
+
+
+
+
+
+
+
+
+
+
