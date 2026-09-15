@@ -8,8 +8,6 @@ Original file is located at
 """
 
 import kagglehub
-
-# Download latest version
 path = kagglehub.dataset_download("emmarex/plantdisease")
 
 print("Path to dataset files:", path)
@@ -40,7 +38,6 @@ CLASS_ROOT = find_class_root(path)
 print("Found class folders at:", CLASS_ROOT)
 print("Classes found:", os.listdir(CLASS_ROOT))
 
-# ============ 2. Split into train/val (80/20) ============
 SPLIT_DIR = "/content/plantvillage_split"
 TRAIN_DIR = os.path.join(SPLIT_DIR, "train")
 VAL_DIR = os.path.join(SPLIT_DIR, "val")
@@ -79,8 +76,7 @@ def create_split(class_root, train_dir, val_dir, val_fraction=0.2, seed=42):
 print("\nCreating train/val split...")
 create_split(CLASS_ROOT, TRAIN_DIR, VAL_DIR)
 
-# ============ 3. Config ============
-MODEL_NAME = "mobilenet_v2"   # matches build_model's "mobilenet_v2" branch below
+MODEL_NAME = "mobilenet_v2"  
 IMG_SIZE = 224
 BATCH_SIZE = 32
 PHASE1_EPOCHS = 10
@@ -92,7 +88,6 @@ os.makedirs(OUT_DIR, exist_ok=True)
 
 print(f"\nGPU available: {tf.config.list_physical_devices('GPU')}")
 
-# ============ 4. Data generators ============
 def get_generators():
     train_datagen = ImageDataGenerator(
         rescale=1.0 / 255,
@@ -107,15 +102,11 @@ def get_generators():
         TRAIN_DIR, target_size=(IMG_SIZE, IMG_SIZE),
         batch_size=BATCH_SIZE, class_mode="categorical", shuffle=True,
     )
-    # shuffle=False here is important -- we need predictions to line up with
-    # true labels in order for sklearn's classification_report
     val_gen = val_datagen.flow_from_directory(
         VAL_DIR, target_size=(IMG_SIZE, IMG_SIZE),
         batch_size=BATCH_SIZE, class_mode="categorical", shuffle=False,
     )
     return train_gen, val_gen
-
-# ============ 5. Model ============
 def build_model(model_name, num_classes):
     input_shape = (IMG_SIZE, IMG_SIZE, 3)
     if model_name == "mobilenet_v2":
@@ -138,15 +129,11 @@ def build_model(model_name, num_classes):
         metrics=["accuracy"],
     )
     return model, base_model
-
-# ============ 6. Class weights (handles imbalance) ============
 def get_class_weights(train_gen):
-    labels = train_gen.classes  # integer labels for every training sample
+    labels = train_gen.classes 
     classes_arr = np.unique(labels)
     weights = compute_class_weight(class_weight="balanced", classes=classes_arr, y=labels)
     return dict(zip(classes_arr.tolist(), weights.tolist()))
-
-# ============ 7. Per-class evaluation ============
 def evaluate_per_class(model, val_gen, classes):
     val_gen.reset()
     preds = model.predict(val_gen, verbose=0)
@@ -215,8 +202,6 @@ def plot_history(history, out_path, phase2_history=None):
     plt.tight_layout()
     plt.savefig(out_path)
     plt.show()
-
-# ============ 8. Run ============
 train_gen, val_gen = get_generators()
 class_indices = train_gen.class_indices
 classes = sorted(class_indices, key=class_indices.get)
@@ -230,8 +215,6 @@ for idx, w in class_weights.items():
 
 model, base_model = build_model(MODEL_NAME, len(classes))
 model.summary()
-
-# ---------- Phase 1: train head only ----------
 print(f"\nPhase 1: training head only ({PHASE1_EPOCHS} epochs)...")
 history = model.fit(
     train_gen,
@@ -249,8 +232,6 @@ phase1_macro_recall = report1["macro avg"]["recall"]
 model.save(f"{MODEL_DIR}/disease_detection_{MODEL_NAME}_phase1.keras")
 with open(f"{MODEL_DIR}/disease_detection_classes.json", "w") as f:
     json.dump(classes, f, indent=2)
-
-# ---------- Phase 2: fine-tune full network ----------
 print(f"\nPhase 2: fine-tuning full network ({PHASE2_EPOCHS} epochs)...")
 base_model.trainable = True
 model.compile(
@@ -270,18 +251,12 @@ print(f"\nBest val accuracy (phase 2, fine-tuned): {best_val_acc2:.4f}")
 report2, true2, pred2 = evaluate_per_class(model, val_gen, classes)
 print_per_class_report(report2, classes)
 phase2_macro_recall = report2["macro avg"]["recall"]
-
-# ---------- Select the better phase by macro RECALL, not accuracy ----------
-# A missed disease (false negative) matters more here than a false alarm,
-# so the "best" checkpoint is whichever phase caught diseases more reliably
-# across classes, not just whichever had higher raw accuracy.
 if phase2_macro_recall >= phase1_macro_recall:
     print(f"\nPhase 2 wins on macro recall ({phase2_macro_recall:.4f} >= {phase1_macro_recall:.4f}) -- using fine-tuned model as best.")
     best_report, best_true, best_pred = report2, true2, pred2
     model.save(f"{MODEL_DIR}/disease_detection_{MODEL_NAME}_best.keras")
 else:
     print(f"\nPhase 1 wins on macro recall ({phase1_macro_recall:.4f} > {phase2_macro_recall:.4f}) -- fine-tuning hurt recall, reverting.")
-    # reload phase 1 weights since `model` object now holds phase 2 (fine-tuned) weights
     model = tf.keras.models.load_model(f"{MODEL_DIR}/disease_detection_{MODEL_NAME}_phase1.keras")
     best_report, best_true, best_pred = report1, true1, pred1
     model.save(f"{MODEL_DIR}/disease_detection_{MODEL_NAME}_best.keras")
