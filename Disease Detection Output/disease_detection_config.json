@@ -1,0 +1,4 @@
+{
+  "model_name": "mobilenet_v2",
+  "img_size": 224
+}
