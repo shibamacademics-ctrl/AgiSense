@@ -85,7 +85,7 @@ def predict_disease(image_bytes : bytes) -> dict:
     return {
         "predicted_disease": top_class,
         "confidence": top_confidence,
-        "treatment_suggestion": _TREATMENT_SUGGESTIONS.get(top_class, "No suggestion available."),
+        "treatment_suggestion": TREATMENT_SUGGESTIONS.get(top_class, "No suggestion available."),
         "top_3_alternatives": top3,
         "low_confidence_warning": top_confidence < 0.6,
     }
