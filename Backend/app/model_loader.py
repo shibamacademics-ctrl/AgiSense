@@ -13,9 +13,10 @@ print("Crop recommendation model loaded successfully!")
 
 def predict_crop(payload: dict) -> dict:
     features = pd.DataFrame([{f: payload[f] for f in crop_feature_order}])
-    probs = crop_model(features)[0]
+    probs = crop_model.predict_proba(features)[0]
+    classes = crop_model.classes_
 
-    top_idx = np.argsort(probs)[::-1][-3]
+    top_idx = np.argsort(probs)[::-1][:3]
     top3 = [{"crop": classes[i], "confidence": round(float(probs[i]), 4)} for i in top_idx]
 
     return {
