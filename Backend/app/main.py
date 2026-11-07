@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -90,7 +91,10 @@ async def detect_disease(file: UploadFile = File(...), x_farmer_id: Optional[str
         raise HTTPException(status_code=400, detail=f"Unsupported file type '{file.content_type}'. Upload a JPEG or PNG image.")
     try:
         image_bytes = await file.read()
+        logger.info("Disease request received: filename=%s bytes=%s", file.filename, len(image_bytes))
+        started_at = time.perf_counter()
         result = model_loader.predict_disease(image_bytes)
+        logger.info("Disease inference completed in %.2f seconds", time.perf_counter() - started_at)
         record_query(
             farmer_id=x_farmer_id,
             query_type="disease_detection",

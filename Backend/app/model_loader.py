@@ -38,8 +38,13 @@ def get_disease_assets():
     with (DISEASE_MODEL_DIR / "disease_detection_config.json").open() as f:
         config = json.load(f)
     model = tf.keras.models.load_model(
-        DISEASE_MODEL_DIR / f"disease_detection_{config['model_name']}_phase1.keras"
+        DISEASE_MODEL_DIR / f"disease_detection_{config['model_name']}_phase1.keras",
+        compile=False,
     )
+    # Trace one inference batch once so the first user request does not pay
+    # the graph-building cost.
+    warmup = np.zeros((1, config["img_size"], config["img_size"], 3), dtype=np.float32)
+    model(warmup, training=False)
     return model, classes, config, keras_image
 
 
@@ -84,7 +89,8 @@ def predict_disease(image_bytes: bytes) -> dict:
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = img.resize((disease_config["img_size"], disease_config["img_size"]))
     arr = keras_image.img_to_array(img) / 255.0
-    probs = disease_model.predict(np.expand_dims(arr, axis=0), verbose=0)[0]
+    # Direct inference avoids Keras' training-oriented predict() setup per call.
+    probs = disease_model(np.expand_dims(arr, axis=0), training=False).numpy()[0]
     top_indices = np.argsort(probs)[::-1][:3]
     top3 = [{"disease": disease_classes[i], "confidence": round(float(probs[i]), 4)} for i in top_indices]
     top_class = top3[0]["disease"]
