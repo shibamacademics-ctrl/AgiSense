@@ -34,6 +34,18 @@ class FarmerQuery(Base):
     )
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+
 engine = create_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False) if engine else None
 
@@ -78,3 +90,27 @@ def list_queries(*, farmer_id: Optional[str] = None, limit: int = 50) -> list[Fa
             statement = statement.where(FarmerQuery.farmer_id == farmer_id)
         statement = statement.order_by(FarmerQuery.created_at.desc()).limit(limit)
         return list(session.scalars(statement))
+
+
+def get_user_by_email(email: str) -> Optional[User]:
+    if SessionLocal is None:
+        return None
+    with SessionLocal() as session:
+        return session.scalar(select(User).where(User.email == email.lower()))
+
+
+def get_user_by_id(user_id: int) -> Optional[User]:
+    if SessionLocal is None:
+        return None
+    with SessionLocal() as session:
+        return session.get(User, user_id)
+
+
+def create_user(*, name: str, email: str, password_hash: str) -> Optional[User]:
+    if SessionLocal is None:
+        return None
+    with SessionLocal.begin() as session:
+        user = User(name=name.strip(), email=email.lower(), password_hash=password_hash)
+        session.add(user)
+        session.flush()
+        return user

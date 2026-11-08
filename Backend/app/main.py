@@ -4,12 +4,14 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
-
-from fastapi import FastAPI, File, Header, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import IntegrityError
 
 from app import model_loader
-from app.database import init_db, list_queries, save_query
+from app.auth import create_access_token, decode_access_token, hash_password, verify_password
+from app.auth_schemas import AuthResponse, LoginRequest, RegisterRequest, UserResponse
+from app.database import create_user, get_user_by_email, get_user_by_id, init_db, list_queries, save_query
 from app.history_schemas import FarmerQueryHistoryResponse
 from app.schemas import (
     CropRecommendationRequest,
@@ -57,6 +59,46 @@ def record_query(*, farmer_id: Optional[str], query_type: str, request_payload: 
         )
     except Exception:
         logger.exception("Could not persist %s query", query_type)
+
+
+def user_response(user) -> UserResponse:
+    return UserResponse(id=user.id, name=user.name, email=user.email, created_at=user.created_at)
+
+
+def current_user(authorization: Optional[str] = Header(default=None)):
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Please sign in first")
+    payload = decode_access_token(authorization.split(" ", 1)[1])
+    user = get_user_by_id(int(payload["sub"]))
+    if user is None:
+        raise HTTPException(status_code=401, detail="User account was not found")
+    return user
+
+
+@app.post("/auth/register", response_model=AuthResponse, status_code=201)
+def register(request: RegisterRequest):
+    if get_user_by_email(request.email) is not None:
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    try:
+        user = create_user(name=request.name, email=request.email, password_hash=hash_password(request.password))
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    if user is None:
+        raise HTTPException(status_code=503, detail="Database is not configured")
+    return AuthResponse(access_token=create_access_token(user.id, user.email), user=user_response(user))
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+def login(request: LoginRequest):
+    user = get_user_by_email(request.email)
+    if user is None or not verify_password(request.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return AuthResponse(access_token=create_access_token(user.id, user.email), user=user_response(user))
+
+
+@app.get("/auth/me", response_model=UserResponse)
+def me(user=Depends(current_user)):
+    return user_response(user)
 
 
 @app.get("/health")
