@@ -8,6 +8,7 @@ joblib==1.4.2
 tensorflow-cpu==2.17.0
 pillow==10.4.0
 pydantic==2.9.2
+email-validator==2.2.0
 sqlalchemy==2.0.36
 psycopg[binary]==3.2.3
 pytest==8.3.4
