@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, ArrowRight, CheckCircle2, CloudSun, Database, FileImage, Leaf, Loader2, LogIn, RefreshCw, Sprout, UploadCloud, XCircle } from "lucide-react";
 import { detectDisease, getHealth, getHistory, predictYield, recommendCrop } from "./api";
+import { clearToken, getCurrentUser, login, register } from "./auth";
 
 const cropDefaults = { N: 90, P: 42, K: 43, temperature: 20.88, humidity: 82, ph: 6.5, rainfall: 202.9 };
 const yieldDefaults = { Area: "India", Item: "Rice, paddy", Year: 2024, average_rain_fall_mm_per_year: 1083, pesticides_tonnes: 500, avg_temp: 26.5 };
-const farmerId = "demo-farmer-001";
+const demoFarmerId = "demo-farmer-001";
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const [active, setActive] = useState("overview");
   const [crop, setCrop] = useState(null);
   const [yieldResult, setYieldResult] = useState(null);
@@ -14,11 +17,14 @@ function App() {
   const [history, setHistory] = useState([]);
   const [apiStatus, setApiStatus] = useState("checking");
   const [notice, setNotice] = useState(null);
+  const farmerId = user?.email || demoFarmerId;
 
   useEffect(() => {
+    getCurrentUser().then(setUser).catch(() => setUser(null)).finally(() => setAuthChecking(false));
     getHealth().then(() => setApiStatus("online")).catch(() => setApiStatus("offline"));
-    refreshHistory();
   }, []);
+
+  useEffect(() => { if (user) refreshHistory(); }, [user]);
 
   async function refreshHistory() {
     try {
@@ -54,12 +60,15 @@ function App() {
     catch (error) { setDisease((current) => ({ ...current, error: error.message })); showError(error); }
   }
 
+  if (authChecking) return <div className="auth-loading"><Loader2 className="spin" size={24} />Checking your session…</div>;
+  if (!user) return <AuthScreen onAuthenticated={setUser} />;
+
   const sections = {
     overview: <Overview onNavigate={setActive} crop={crop} yieldResult={yieldResult} disease={disease} history={history} />,
     crop: <CropPanel onSubmit={runCrop} state={crop} />,
     yield: <YieldPanel onSubmit={runYield} state={yieldResult} />,
     disease: <DiseasePanel onSubmit={runDisease} state={disease} />,
-    history: <HistoryPanel items={history} onRefresh={refreshHistory} />,
+    history: <HistoryPanel items={history} onRefresh={refreshHistory} farmerId={farmerId} />,
   };
 
   return <div className="app-shell">
@@ -69,12 +78,26 @@ function App() {
       <div className="sidebar-note"><span className={`status-dot ${apiStatus}`} />API {apiStatus === "online" ? "connected" : apiStatus === "offline" ? "offline" : "checking"}<p>Predictions are advisory. Verify decisions locally.</p></div>
     </aside>
     <main className="main-content">
-      <header className="topbar"><div><div className="eyebrow">WEEK 5 · FRONTEND + INTEGRATION</div><h1>Good morning, grower.</h1></div><div className="farmer-chip"><span className="avatar">S</span><span><b>Shibam</b><small>Demo farmer</small></span></div></header>
+      <header className="topbar"><div><div className="eyebrow">WEEK 5 · FRONTEND + INTEGRATION</div><h1>Good morning, grower.</h1></div><div className="farmer-chip"><span className="avatar">{user.name.slice(0, 1).toUpperCase()}</span><span><b>{user.name}</b><small>{user.email}</small></span><button className="logout-button" onClick={() => { clearToken(); setUser(null); }}>Log out</button></div></header>
       {notice && <div className={notice.type === "error" ? "notice error" : "notice success"}><XCircle size={17} />{notice.text}<button onClick={() => setNotice(null)}>×</button></div>}
       <section className="hero"><div><span className="pill gold">AI-ASSISTED CROP MANAGEMENT</span><h2>Make your next field decision with more context.</h2><p>One workspace for crop fit, yield planning, plant health, and the history behind every query.</p><div className="hero-actions"><button className="button primary" onClick={() => setActive("crop")}>Run crop fit <ArrowRight size={16} /></button><button className="button ghost" onClick={() => setActive("disease")}>Analyze a leaf</button></div></div><div className="hero-orbit"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="orbit-copy"><small>TODAY'S PRINCIPLE</small><strong>Measure twice.<br />Act clearly.</strong></div></div></section>
       {sections[active]}
     </main>
   </div>;
+}
+
+function AuthScreen({ onAuthenticated }) {
+  const [mode, setMode] = useState("login");
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const submit = async (event) => {
+    event.preventDefault(); setError(""); setLoading(true);
+    try { const response = mode === "login" ? await login({ email: form.email, password: form.password }) : await register(form); onAuthenticated(response.user); }
+    catch (requestError) { setError(requestError.message); }
+    finally { setLoading(false); }
+  };
+  return <div className="auth-shell"><div className="auth-art"><div className="brand"><span className="brand-mark"><Sprout size={21} /></span><span><strong>AgriSense</strong><small>FIELD INTELLIGENCE</small></span></div><div><span className="pill gold">PRIVATE FIELD WORKSPACE</span><h1>Better decisions<br />start with context.</h1><p>Sign in to keep your crop recommendations, yield forecasts, and plant-health checks together.</p></div></div><form className="auth-card" onSubmit={submit}><div className="eyebrow">{mode === "login" ? "WELCOME BACK" : "NEW FARMER ACCOUNT"}</div><h2>{mode === "login" ? "Sign in to AgriSense" : "Create your account"}</h2><p className="panel-intro">{mode === "login" ? "Use your email and password to continue." : "Your prediction history will be tied to this account."}</p>{mode === "register" && <label className="field"><span>Your name</span><input required minLength="2" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Shibam" /></label>}<label className="field"><span>Email address</span><input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="you@example.com" /></label><label className="field"><span>Password</span><input required type="password" minLength="8" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="At least 8 characters" /></label>{error && <InlineError text={error} />}<button className="button primary full" disabled={loading}>{loading ? <><Loader2 className="spin" size={17} /> Working…</> : mode === "login" ? <><LogIn size={16} /> Sign in</> : "Create account"}</button><button type="button" className="auth-switch" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>{mode === "login" ? "Need an account? Create one" : "Already have an account? Sign in"}</button></form></div>;
 }
 
 function Overview({ onNavigate, crop, yieldResult, disease, history }) {
@@ -95,7 +118,7 @@ function CropPanel({ onSubmit, state }) { const [form, setForm] = useState(cropD
 function YieldPanel({ onSubmit, state }) { const [form, setForm] = useState(yieldDefaults); const update = (name, value) => setForm((current) => ({ ...current, [name]: ["Area", "Item"].includes(name) ? value : Number(value) })); return <div className="split-layout"><FormCard eyebrow="02 · YIELD FORECAST" title="Plan expected yield" description="Estimate output from the same features used by the trained regression pipeline." onSubmit={() => onSubmit(form)} submitLabel="Predict yield" loading={state?.loading}><div className="field-grid"><label className="field"><span>Area / region</span><input required value={form.Area} onChange={(event) => update("Area", event.target.value)} /><small>e.g. India</small></label><label className="field"><span>Crop item</span><input required value={form.Item} onChange={(event) => update("Item", event.target.value)} /><small>e.g. Rice, paddy</small></label><NumberField label="Year" name="Year" value={form.Year} min={1960} max={2030} step="1" onChange={(value) => update("Year", value)} /><NumberField label="Rainfall (mm/year)" name="average_rain_fall_mm_per_year" value={form.average_rain_fall_mm_per_year} min={0} max={10000} onChange={(value) => update("average_rain_fall_mm_per_year", value)} /><NumberField label="Pesticides (tonnes)" name="pesticides_tonnes" value={form.pesticides_tonnes} min={0} max={100000} onChange={(value) => update("pesticides_tonnes", value)} /><NumberField label="Average temperature" name="avg_temp" value={form.avg_temp} min={-30} max={50} onChange={(value) => update("avg_temp", value)} /></div></FormCard><ResultCard eyebrow="MODEL OUTPUT" title={state?.result ? `${state.result.predicted_yield_tonnes_per_ha} tonnes / ha` : "Your yield forecast appears here"} loading={state?.loading} error={state?.error}>{state?.result ? <><div className="yield-number">{state.result.predicted_yield_hg_per_ha.toLocaleString()} <span>hg / ha</span></div><p className="disclaimer">This estimate is a model output, not a guaranteed harvest. Weather, variety, soil, and farm practice can change the result.</p></> : <EmptyState text="Submit the form to see a yield estimate." />}</ResultCard></div>; }
 function DiseasePanel({ onSubmit, state }) { return <div className="split-layout"><section className="panel form-panel"><div className="eyebrow">03 · PLANT HEALTH</div><h2>Screen a leaf image</h2><p className="panel-intro">Upload a clear JPG or PNG image. The file is sent directly to the FastAPI disease endpoint.</p><label className="dropzone"><UploadCloud size={30} /><strong>Choose a leaf image</strong><span>JPG or PNG · maximum 10 MB</span><input type="file" accept="image/jpeg,image/png" onChange={(event) => onSubmit(event.target.files?.[0])} /></label>{state?.preview && <div className="preview"><img src={state.preview} alt="Selected leaf preview" /><span>{state.fileName}</span></div>}{state?.error && <InlineError text={state.error} />}</section><ResultCard eyebrow="MODEL OUTPUT" title={state?.result ? state.result.predicted_disease.replaceAll("_", " ") : "Your plant health result appears here"} loading={state?.loading} error={state?.error}>{state?.result ? <><div className="result-highlight"><strong>{Math.round(state.result.confidence * 100)}%</strong><span>{state.result.low_confidence_warning ? "low confidence — inspect carefully" : "model confidence"}</span></div><p className="treatment"><b>Treatment suggestion</b>{state.result.treatment_suggestion}</p><p className="disclaimer">Educational image screening only. This is not an official diagnosis. Consult a local agriculture expert before treatment.</p></> : <EmptyState text="Choose an image to start analysis." />}</ResultCard></div>; }
 function ResultCard({ eyebrow, title, children, loading, error }) { return <section className="panel result-panel"><div className="eyebrow">{eyebrow}</div><h2>{title}</h2>{error ? <InlineError text={error} /> : loading ? <div className="loading-box"><Loader2 className="spin" /><span>Calling the prediction API…</span></div> : children}</section>; }
-function HistoryPanel({ items, onRefresh }) { return <section className="panel history-panel"><div className="section-heading"><div><div className="eyebrow">SAVED QUERIES</div><h2>Farmer query history</h2><p className="panel-intro">Successful prediction responses saved by the API for <b>{farmerId}</b>.</p></div><button className="button ghost" onClick={onRefresh}><RefreshCw size={16} /> Refresh</button></div>{items.length ? <HistoryRows items={items} /> : <EmptyState text="No saved queries yet. Run a prediction to create your first history record." />}</section>; }
+function HistoryPanel({ items, onRefresh, farmerId }) { return <section className="panel history-panel"><div className="section-heading"><div><div className="eyebrow">SAVED QUERIES</div><h2>Farmer query history</h2><p className="panel-intro">Successful prediction responses saved by the API for <b>{farmerId}</b>.</p></div><button className="button ghost" onClick={onRefresh}><RefreshCw size={16} /> Refresh</button></div>{items.length ? <HistoryRows items={items} /> : <EmptyState text="No saved queries yet. Run a prediction to create your first history record." />}</section>; }
 function HistoryRows({ items }) { return <div className="history-list">{items.map((item) => <div className="history-row" key={item.id}><span className="history-icon">{item.query_type === "disease_detection" ? <FileImage size={17} /> : item.query_type === "yield_prediction" ? <CloudSun size={17} /> : <Sprout size={17} />}</span><div><b>{item.query_type.replaceAll("_", " ")}</b><small>{new Date(item.created_at).toLocaleString()}</small></div><strong>{item.response_payload.recommended_crop || item.response_payload.predicted_disease || `${item.response_payload.predicted_yield_tonnes_per_ha || "—"} t/ha`}</strong></div>)}</div>; }
 function EmptyState({ text }) { return <div className="empty-state"><Leaf size={22} /><span>{text}</span></div>; }
 function InlineError({ text }) { return <div className="inline-error"><XCircle size={17} />{text}</div>; }

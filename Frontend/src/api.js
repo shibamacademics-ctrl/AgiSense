@@ -1,4 +1,11 @@
+import { getToken } from "./auth";
+
 const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
+function authHeaders(extra = {}) {
+  const token = getToken();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 async function parseResponse(response) {
   const body = await response.json().catch(() => ({}));
@@ -15,9 +22,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } catch (error) {
-    if (error.name === "AbortError") {
-      throw new Error("The disease model did not respond within 90 seconds. Check the backend terminal for the TensorFlow error.");
-    }
+    if (error.name === "AbortError") throw new Error("The disease model did not respond within 90 seconds. Check the backend terminal for the TensorFlow error.");
     throw new Error("Cannot reach the FastAPI backend. Confirm it is running at http://127.0.0.1:8000.");
   } finally {
     clearTimeout(timeout);
@@ -27,7 +32,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
 export function recommendCrop(payload, farmerId) {
   return fetchWithTimeout(`${API_BASE}/recommend-crop`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(farmerId ? { "X-Farmer-ID": farmerId } : {}) },
+    headers: authHeaders({ "Content-Type": "application/json", ...(farmerId ? { "X-Farmer-ID": farmerId } : {}) }),
     body: JSON.stringify(payload),
   }).then(parseResponse);
 }
@@ -35,7 +40,7 @@ export function recommendCrop(payload, farmerId) {
 export function predictYield(payload, farmerId) {
   return fetchWithTimeout(`${API_BASE}/predict-yield`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(farmerId ? { "X-Farmer-ID": farmerId } : {}) },
+    headers: authHeaders({ "Content-Type": "application/json", ...(farmerId ? { "X-Farmer-ID": farmerId } : {}) }),
     body: JSON.stringify(payload),
   }).then(parseResponse);
 }
@@ -45,7 +50,7 @@ export function detectDisease(file, farmerId) {
   body.append("file", file);
   return fetchWithTimeout(`${API_BASE}/detect-disease`, {
     method: "POST",
-    headers: farmerId ? { "X-Farmer-ID": farmerId } : {},
+    headers: authHeaders(farmerId ? { "X-Farmer-ID": farmerId } : {}),
     body,
   }, 90000).then(parseResponse);
 }
@@ -53,7 +58,7 @@ export function detectDisease(file, farmerId) {
 export function getHistory(farmerId, limit = 20) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (farmerId) params.set("farmer_id", farmerId);
-  return fetch(`${API_BASE}/farmer-queries?${params}`).then(parseResponse);
+  return fetch(`${API_BASE}/farmer-queries?${params}`, { headers: authHeaders() }).then(parseResponse);
 }
 
 export function getHealth() {
