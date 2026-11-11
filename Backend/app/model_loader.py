@@ -9,10 +9,28 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 
+def _find_dir(dir_name: str, env_var: str) -> Path:
+    env_val = os.getenv(env_var)
+    if env_val and Path(env_val).exists():
+        return Path(env_val)
+    current = Path(__file__).resolve()
+    candidates = [
+        current.parents[2] / dir_name,
+        current.parents[1] / dir_name,
+        Path.cwd() / dir_name,
+        Path.cwd() / "Backend" / dir_name,
+        Path("/app") / dir_name,
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return current.parents[2] / dir_name
+
+
 BASE_DIR = Path(__file__).resolve().parents[2]
-CROP_MODEL_DIR = Path(os.getenv("CROP_MODEL_DIR", BASE_DIR / "Crop Recommendation Train Output"))
-YIELD_MODEL_DIR = Path(os.getenv("YIELD_MODEL_DIR", BASE_DIR / "Yield Train Output"))
-DISEASE_MODEL_DIR = Path(os.getenv("DISEASE_MODEL_DIR", BASE_DIR / "Disease Detection Output"))
+CROP_MODEL_DIR = _find_dir("Crop Recommendation Train Output", "CROP_MODEL_DIR")
+YIELD_MODEL_DIR = _find_dir("Yield Train Output", "YIELD_MODEL_DIR")
+DISEASE_MODEL_DIR = _find_dir("Disease Detection Output", "DISEASE_MODEL_DIR")
 
 CROP_FEATURE_ORDER = ["N", "P", "K", "temperature", "humidity", "ph", "rainfall"]
 YIELD_FEATURE_ORDER = ["Year", "average_rain_fall_mm_per_year", "pesticides_tonnes", "avg_temp", "Area", "Item"]

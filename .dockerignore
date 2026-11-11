@@ -1,0 +1,29 @@
+# Version control
+.git
+.gitignore
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+crop_env/
+venv/
+.env
+
+# Large raw training dataset (PlantVillage images - 680MB+)
+data/
+
+# Frontend local build / dev artifacts
+Frontend/node_modules/
+Frontend/dist/
+.vercel/
+.netlify/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.md

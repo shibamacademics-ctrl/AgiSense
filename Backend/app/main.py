@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
 
 from app import model_loader
@@ -43,6 +45,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in os.getenv("FRONTEND_ORIGINS", "http://localhost:3000,http://localhost:5173,https://agrisense-ruddy-three.vercel.app").split(",") if origin.strip()],
+    allow_origin_regex=os.getenv("ALLOWED_ORIGIN_REGEX", r"^https?://.*"),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -153,3 +156,31 @@ async def detect_disease(file: UploadFile = File(...), x_farmer_id: Optional[str
 def farmer_queries(farmer_id: Optional[str] = Query(default=None), limit: int = Query(default=50, ge=1, le=100)):
     records = list_queries(farmer_id=farmer_id, limit=limit)
     return {"items": records, "count": len(records)}
+
+
+# Serve built React frontend SPA if dist exists (single-container mode)
+def _find_frontend_dist() -> Optional[Path]:
+    candidates = [
+        Path(__file__).resolve().parents[2] / "Frontend" / "dist",
+        Path(__file__).resolve().parents[1] / "Frontend" / "dist",
+        Path.cwd() / "Frontend" / "dist",
+        Path("/app/Frontend/dist"),
+    ]
+    for c in candidates:
+        if c.exists() and (c / "index.html").exists():
+            return c
+    return None
+
+frontend_dist = _find_frontend_dist()
+if frontend_dist:
+    assets_dir = frontend_dist / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="frontend_assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        target = frontend_dist / full_path
+        if full_path and target.is_file():
+            return FileResponse(target)
+        return FileResponse(frontend_dist / "index.html")
+

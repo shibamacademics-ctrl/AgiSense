@@ -6,10 +6,16 @@ from sqlalchemy import DateTime, Integer, String, Text, create_engine, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
-_configured_database_url = os.getenv("DATABASE_URL")
+_raw_db_url = os.getenv("DATABASE_URL")
+if _raw_db_url:
+    if _raw_db_url.startswith("postgres://"):
+        _raw_db_url = _raw_db_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif _raw_db_url.startswith("postgresql://") and not _raw_db_url.startswith("postgresql+"):
+        _raw_db_url = _raw_db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
 DATABASE_URL = (
-    _configured_database_url
-    if _configured_database_url and _configured_database_url.startswith(("postgresql://", "postgresql+psycopg://"))
+    _raw_db_url
+    if _raw_db_url and _raw_db_url.startswith(("postgresql://", "postgresql+psycopg://"))
     else None
 )
 
