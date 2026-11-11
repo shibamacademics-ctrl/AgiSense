@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import DateTime, Integer, String, Text, create_engine, select
+from sqlalchemy import DateTime, Integer, JSON, String, Text, create_engine, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
@@ -13,11 +13,7 @@ if _raw_db_url:
     elif _raw_db_url.startswith("postgresql://") and not _raw_db_url.startswith("postgresql+"):
         _raw_db_url = _raw_db_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
-DATABASE_URL = (
-    _raw_db_url
-    if _raw_db_url and _raw_db_url.startswith(("postgresql://", "postgresql+psycopg://"))
-    else None
-)
+DATABASE_URL = _raw_db_url or "sqlite:///./agisense.db"
 
 
 class Base(DeclarativeBase):
@@ -30,8 +26,8 @@ class FarmerQuery(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     farmer_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
     query_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    request_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    response_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    request_payload: Mapped[dict[str, Any]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=False)
+    response_payload: Mapped[dict[str, Any]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -52,8 +48,13 @@ class User(Base):
     )
 
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
-SessionLocal = sessionmaker(bind=engine, expire_on_commit=False) if engine else None
+_is_sqlite = DATABASE_URL.startswith("sqlite")
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=not _is_sqlite,
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
+)
+SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 def init_db() -> None:
