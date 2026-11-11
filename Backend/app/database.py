@@ -67,6 +67,14 @@ def init_db() -> None:
         Base.metadata.create_all(bind=engine)
 
 
+# Auto-create tables for local SQLite so querying never throws "no such table"
+if _is_sqlite and engine is not None:
+    try:
+        init_db()
+    except Exception:
+        pass
+
+
 def save_query(
     *,
     query_type: str,
