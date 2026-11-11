@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -41,7 +42,7 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=[origin.strip() for origin in os.getenv("FRONTEND_ORIGINS", "http://localhost:3000,http://localhost:5173,https://agrisense-ruddy-three.vercel.app").split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
