@@ -1,11 +1,11 @@
 services:
   - type: web
     name: agisense-app
-    env: docker
-    dockerfilePath: ./Dockerfile
+    runtime: docker
     plan: free
     region: oregon
     branch: copy
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     envVars:
       - key: PORT

@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -172,6 +173,21 @@ def _find_frontend_dist() -> Optional[Path]:
     return None
 
 frontend_dist = _find_frontend_dist()
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    if frontend_dist and (frontend_dist / "index.html").exists():
+        return FileResponse(frontend_dist / "index.html")
+    return {
+        "service": "AgiSense API",
+        "status": "online",
+        "docs": "/docs",
+        "health": "/health",
+        "frontend": "https://agrisense-ruddy-three.vercel.app",
+    }
+
+
 if frontend_dist:
     assets_dir = frontend_dist / "assets"
     if assets_dir.exists():

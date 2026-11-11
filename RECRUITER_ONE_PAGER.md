@@ -72,3 +72,4 @@ AgiSense is a production-grade machine learning and full-stack web platform buil
 - **Live Frontend:** [https://agrisense-ruddy-three.vercel.app](https://agrisense-ruddy-three.vercel.app)
 - **Codebase:** [github.com/shibamacademics-ctrl/AgiSense/tree/copy](https://github.com/shibamacademics-ctrl/AgiSense/tree/copy)
 - **Author:** Shibam ([shibamacademics-ctrl](https://github.com/shibamacademics-ctrl))
+

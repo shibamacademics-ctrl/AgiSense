@@ -50,3 +50,4 @@ services:
 
 volumes:
   agisense_pgdata:
+

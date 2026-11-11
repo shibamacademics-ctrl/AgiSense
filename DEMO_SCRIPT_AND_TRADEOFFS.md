@@ -124,3 +124,4 @@ B. PRODUCTION SCALABILITY BLUEPRINT (10 -> 10,000 Users)
 
 **Q: Why use PostgreSQL JSONB for query history instead of a traditional relational schema?**  
 *A: Each query type (crop recommendation, disease diagnosis, yield prediction) has fundamentally different payload shapes. PostgreSQL's JSONB gives us the flexibility of a document store like MongoDB while retaining ACID guarantees and relational foreign keys for the user account model.*
+
